@@ -2,40 +2,295 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>連携テスト</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silent Orbit - Mission Control</title>
+    <style>
+        /* --- 宇宙船スタイル --- */
+        body { background-color: #0d0d15; color: #0f0; font-family: 'Courier New', monospace; text-align: center; margin: 0; padding: 10px; }
+        h1, h2, h3 { margin: 5px 0; text-shadow: 0 0 5px #0f0; }
+        .hidden { display: none !important; }
+        
+        /* 枠線とパネル */
+        .panel { border: 2px solid #0f0; border-radius: 10px; padding: 10px; margin: 10px auto; max-width: 600px; background: rgba(0, 50, 0, 0.3); }
+        .hud-value { font-size: 1.5em; font-weight: bold; color: #fff; }
+        
+        /* ボタン */
+        button { background: #003300; color: #0f0; border: 1px solid #0f0; padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; border-radius: 5px; transition: 0.2s; }
+        button:hover { background: #005500; box-shadow: 0 0 10px #0f0; }
+        button:disabled { border-color: #555; color: #555; background: #111; cursor: not-allowed; box-shadow: none; }
+        .btn-reset { border-color: red; color: red; background: #300; }
+        .btn-reset:hover { background: #500; box-shadow: 0 0 10px red; }
+
+        /* サイコロ */
+        .dice-container { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+        .dice { width: 50px; height: 50px; line-height: 50px; border: 2px solid #0f0; font-size: 24px; font-weight: bold; background: #000; cursor: pointer; }
+        .dice.selected { background: #0f0; color: #000; box-shadow: 0 0 15px #0f0; }
+        .dice.used { border-color: #555; color: #555; cursor: default; }
+
+        /* スロットエリア */
+        .slot-area { display: flex; justify-content: space-around; flex-wrap: wrap; }
+        .slot-box { border: 1px dashed #0f0; padding: 10px; width: 30%; min-width: 100px; margin: 5px; }
+        .slot-val { font-size: 20px; color: #fff; }
+    </style>
 </head>
-<body style="text-align:center; padding:50px;">
+<body>
 
-    <h1>接続テスト</h1>
-    <div id="display" style="font-size:80px; font-weight:bold;">---</div>
+    <div id="lobby-screen">
+        <h1>SILENT ORBIT</h1>
+        <p>Mission Status: WAITING</p>
+        <div class="panel">
+            <h3>SELECT ROLE</h3>
+            <button onclick="tryJoin('pilot')">👨‍🚀 操縦士 (Pilot)</button>
+            <button onclick="tryJoin('engineer')">🔧 機関士 (Engineer)</button>
+        </div>
+        <div class="panel" style="border-color: #555;">
+            <button onclick="joinAudience()">👀 観戦モニター</button>
+            <button onclick="joinSV()" style="color: yellow; border-color: yellow;">👑 SV Menu</button>
+        </div>
+    </div>
 
-    <button onclick="send('plus')" style="font-size:20px; padding:10px;">増やす</button>
-    <button onclick="send('reset')" style="font-size:20px; padding:10px;">リセット</button>
+    <div id="game-screen" class="hidden">
+        <div style="display:flex; justify-content:space-between; padding:0 10px;">
+            <span>Role: <span id="my-role-name" style="font-weight:bold;">--</span></span>
+            <button id="sv-reset-btn" class="hidden btn-reset" onclick="sendReset()">⚠ EMERGENCY RESET</button>
+        </div>
+
+        <div class="panel" style="display:flex; justify-content:space-around;">
+            <div>⛽ FUEL<br><span id="hud-fuel" class="hud-value">-</span></div>
+            <div>🚀 DIST<br><span id="hud-dist" class="hud-value">-</span></div>
+            <div>🛡 SHIELD<br><span id="hud-shield" class="hud-value">-</span></div>
+        </div>
+
+        <div class="panel">
+            <div id="msg-box" style="height:20px; color:yellow;">通信待機中...</div>
+
+            <div id="area-pilot">
+                <h3>PILOT DECK</h3>
+                <div id="pilot-dice-container" class="dice-container"></div>
+                <button id="btn-roll-pilot" onclick="rollDice('pilot')" disabled>🎲 ROLL DICE</button>
+            </div>
+
+            <hr style="border-color:#030;">
+
+            <div id="area-engineer">
+                <h3>ENGINEER DECK</h3>
+                <div id="eng-dice-container" class="dice-container"></div>
+                <button id="btn-roll-eng" onclick="rollDice('engineer')" disabled>🎲 ROLL DICE</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>SYSTEM SLOTS</h3>
+            <div class="slot-area">
+                <div class="slot-box">
+                    <div>🚀 THRUSTER</div>
+                    <div id="slot-move-val" class="slot-val">0</div>
+                    <button id="btn-place-move" onclick="placeDice('move')" disabled>SET</button>
+                </div>
+                <div class="slot-box">
+                    <div>⚡ REACTOR</div>
+                    <div id="slot-energy-val" class="slot-val">0</div>
+                    <button id="btn-place-energy" onclick="placeDice('energy')" disabled>SET</button>
+                </div>
+                <div class="slot-box">
+                    <div>🔧 REPAIR</div>
+                    <div id="slot-shield-val" class="slot-val">0</div>
+                    <button id="btn-place-shield" onclick="placeDice('shield')" disabled>SET</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        // ★ここにさっきのURLを貼る (シングルクォート ' で囲むのを忘れずに！)
-        const API_URL = 'https://script.google.com/macros/s/AKfycbwwEk5MydYpxls4tR16yQRuh2Kqv0nmBM-ExIm8dXqKAqksWuLWgddpPO9zTA9wviFo/exec';
+        // =================================================================
+        // ★★★ ここに GASウェブアプリのURL を貼り付けてください ★★★
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyOkcgU8ko-43RWPUr0MrSwISwyNhBo46TaO2WTfQ4KE8rwUSKdkJHRzrvgdr1YF1XP/exec';
+        // =================================================================
 
-        // データを送受信する関数
-        function send(action) {
-            document.getElementById('display').innerText = '通信中...';
+        let myRole = ''; // pilot, engineer, supervisor, audience
+        let selectedDiceValue = 0; // 今選んでいるサイコロの値
+        let pollingInterval = null;
+
+        // --- 1. 参加処理 ---
+        
+        // プレイヤーとして参加（早い者勝ちチェック）
+        async function tryJoin(role) {
+            showMessage("スロット確認中...");
+            const res = await sendData({ action: 'join', role: role });
             
-            // URLの後ろに ?action=plus などをつけてアクセスする
-            fetch(API_URL + '?action=' + action)
-                .then(response => response.json()) // 返ってきた文字をプログラムとして読む
-                .then(data => {
-                    // 画面の数字を更新
-                    document.getElementById('display').innerText = data.count;
-                })
-                .catch(error => {
-                    document.getElementById('display').innerText = 'エラー';
-                    alert('通信失敗！URLやネット環境を確認してください');
-                });
+            if (res.result === 'success') {
+                startGame(role);
+            } else {
+                alert("その席は既に埋まっています！観戦モードに移行します。");
+                startGame('audience');
+            }
         }
 
-        // ページを開いたときに一回読み込む（actionなし＝見るだけ）
-        send('');
-    </script>
+        // 観戦者として参加
+        function joinAudience() {
+            startGame('audience');
+        }
 
+        // SVとして参加（パスワード認証）
+        function joinSV() {
+            const pw = prompt("スーパーバイザー用パスワードを入力:");
+            if (pw === "1234") {
+                startGame('supervisor');
+            } else {
+                alert("パスワードが違います");
+            }
+        }
+
+        // 画面切り替えとループ開始
+        function startGame(role) {
+            myRole = role;
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            
+            // 役割名表示
+            const names = { 'pilot': 'PILOT', 'engineer': 'ENGINEER', 'supervisor': 'SUPERVISOR', 'audience': 'OBSERVER' };
+            document.getElementById('my-role-name').innerText = names[role];
+            document.getElementById('my-role-name').style.color = (role === 'supervisor') ? 'yellow' : '#0f0';
+
+            // SVボタン表示
+            if (role === 'supervisor') {
+                document.getElementById('sv-reset-btn').classList.remove('hidden');
+            }
+
+            // 通信開始 (プレイヤーは1秒、観戦者は3秒間隔で負荷軽減)
+            const intervalTime = (role === 'audience') ? 3000 : 1000;
+            updateScreen(); // 初回実行
+            pollingInterval = setInterval(updateScreen, intervalTime);
+        }
+
+        // --- 2. ゲームアクション ---
+
+        // サイコロを振る
+        async function rollDice(targetRole) {
+            if (myRole !== targetRole && myRole !== 'supervisor') return; // 自分の番以外は無視
+            showMessage("サイコロを振っています...");
+            await sendData({ action: 'roll', role: targetRole });
+            updateScreen();
+        }
+
+        // サイコロを選ぶ (クリック時)
+        function selectDice(val, element) {
+            if (val === 0) return; // 0は空
+            
+            // 選択状態の見た目切り替え
+            document.querySelectorAll('.dice').forEach(d => d.classList.remove('selected'));
+            element.classList.add('selected');
+            
+            selectedDiceValue = val;
+            showMessage(`値 [ ${val} ] を選択中。配置先を選んでください。`);
+            
+            // ボタンを有効化 (役割に応じて制限)
+            updateButtonState();
+        }
+
+        // サイコロをスロットに置く
+        async function placeDice(slotName) {
+            if (selectedDiceValue === 0) return;
+            
+            showMessage("配置中...");
+            await sendData({ action: 'place', slot: slotName, value: selectedDiceValue });
+            
+            selectedDiceValue = 0; // 選択解除
+            updateScreen();
+        }
+
+        // リセット (SVのみ)
+        async function sendReset() {
+            if (!confirm("本当にリセットしますか？全員のゲームが初期化されます。")) return;
+            showMessage("リセット実行中...");
+            await sendData({ action: 'reset' });
+            updateScreen();
+        }
+
+        // --- 3. 画面更新 (ポーリング) ---
+        async function updateScreen() {
+            try {
+                // 何も送らずにGETすると最新状態が返ってくる
+                const res = await fetch(API_URL).then(r => r.json());
+                const s = res.state;
+
+                // HUD更新
+                document.getElementById('hud-fuel').innerText = s.fuel;
+                document.getElementById('hud-dist').innerText = s.distance;
+                document.getElementById('hud-shield').innerText = s.shield;
+
+                // スロット更新
+                document.getElementById('slot-move-val').innerText = s.slot_move;
+                document.getElementById('slot-energy-val').innerText = s.slot_energy;
+                document.getElementById('slot-shield-val').innerText = s.slot_shield;
+
+                // サイコロ描画
+                renderDice('pilot', s.p_dice);
+                renderDice('engineer', s.e_dice);
+
+                // ボタン制御 (自分のターンか？)
+                updateButtonState();
+                
+                // メッセージ
+                if(document.getElementById('msg-box').innerText === "通信待機中...") {
+                     showMessage("システム正常稼働中");
+                }
+
+            } catch (e) {
+                console.error(e);
+                showMessage("通信エラー: 再接続中...");
+            }
+        }
+
+        // サイコロを描画する関数
+        function renderDice(role, diceArray) {
+            const container = (role === 'pilot') ? document.getElementById('pilot-dice-container') : document.getElementById('eng-dice-container');
+            container.innerHTML = ''; // クリア
+
+            diceArray.forEach(val => {
+                const div = document.createElement('div');
+                div.className = 'dice';
+                div.innerText = val === 0 ? '-' : val;
+                
+                // すでに使用済み(0)なら薄く
+                if (val === 0) div.classList.add('used');
+
+                // 自分のサイコロならクリック可能に
+                if (myRole === role && val !== 0) {
+                    div.onclick = function() { selectDice(val, div); };
+                }
+                container.appendChild(div);
+            });
+        }
+
+        // ボタンの有効・無効を管理
+        function updateButtonState() {
+            // ROLLボタン: 自分がその役割なら押せる
+            document.getElementById('btn-roll-pilot').disabled = (myRole !== 'pilot');
+            document.getElementById('btn-roll-eng').disabled = (myRole !== 'engineer');
+
+            // 配置ボタン: サイコロを選んでないと押せない + 役割制限
+            const hasSelected = (selectedDiceValue !== 0);
+            
+            // 操縦士は「移動」のみ
+            document.getElementById('btn-place-move').disabled = !(hasSelected && myRole === 'pilot');
+            
+            // 機関士は「エネルギー」「修理」のみ
+            document.getElementById('btn-place-energy').disabled = !(hasSelected && myRole === 'engineer');
+            document.getElementById('btn-place-shield').disabled = !(hasSelected && myRole === 'engineer');
+        }
+
+        // 汎用: データ送信
+        async function sendData(params) {
+            // URLパラメータを作成 (?action=join&role=pilot...)
+            const qs = new URLSearchParams(params).toString();
+            const res = await fetch(API_URL + '?' + qs).then(r => r.json());
+            return res;
+        }
+
+        function showMessage(msg) {
+            document.getElementById('msg-box').innerText = msg;
+        }
+    </script>
 </body>
 </html>
