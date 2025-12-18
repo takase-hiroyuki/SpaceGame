@@ -26,11 +26,11 @@
     <div id="game-screen" class="section hidden">
         
         <div style="background-color: #eee; padding: 10px; border-bottom: 2px solid red;">            
-            状態: <span id="status-text" style="font-weight:bold;">待機中</span>
-            次の更新まで: <span id="timer-display" style="font-size:24px; color:blue; font-weight:bold;">--</span> 秒
+            更新まで: <span id="timer-display" style="font-size:24px; color:blue; font-weight:bold;">--</span> 秒
+            <span id="status-text" style="font-weight:bold;">待機中</span>
         </div>
         <div class="section">
-            <あなたの役割: <span id="my-role-display">--</span> | 
+            <span id="my-role-display">--</span> ・・・ 
             燃料: <span id="val-fuel">0</span> | 
             距離: <span id="val-dist">0</span> | 
             盾: <span id="val-shield">0</span>
@@ -39,10 +39,10 @@
         <div class="section">
             [1] サイコロを振る
                 <b>操縦士:</b> <span id="p-dice-view"></span>
-                <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>
+                <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>　
                 <b>機関士:</b> <span id="e-dice-view"></span>
-                <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>
-                <p>選択中の値: <b id="selected-val" style="font-size:12px; color:red;">未選択</b></p>
+                <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>　
+                選択中の値: <b id="selected-val" color:red;">未選択</b>
         </div>
 
         <div class="section">
