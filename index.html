@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>連携テスト</title>
+</head>
+<body style="text-align:center; padding:50px;">
+
+    <h1>接続テスト</h1>
+    <div id="display" style="font-size:80px; font-weight:bold;">---</div>
+
+    <button onclick="send('plus')" style="font-size:20px; padding:10px;">増やす</button>
+    <button onclick="send('reset')" style="font-size:20px; padding:10px;">リセット</button>
+
+    <script>
+        // ★ここにさっきのURLを貼る (シングルクォート ' で囲むのを忘れずに！)
+        const API_URL = 'https://script.google.com/macros/s/AKfycbwwEk5MydYpxls4tR16yQRuh2Kqv0nmBM-ExIm8dXqKAqksWuLWgddpPO9zTA9wviFo/exec';
+
+        // データを送受信する関数
+        function send(action) {
+            document.getElementById('display').innerText = '通信中...';
+            
+            // URLの後ろに ?action=plus などをつけてアクセスする
+            fetch(API_URL + '?action=' + action)
+                .then(response => response.json()) // 返ってきた文字をプログラムとして読む
+                .then(data => {
+                    // 画面の数字を更新
+                    document.getElementById('display').innerText = data.count;
+                })
+                .catch(error => {
+                    document.getElementById('display').innerText = 'エラー';
+                    alert('通信失敗！URLやネット環境を確認してください');
+                });
+        }
+
+        // ページを開いたときに一回読み込む（actionなし＝見るだけ）
+        send('');
+    </script>
+
+</body>
+</html>
