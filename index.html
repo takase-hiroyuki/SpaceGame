@@ -25,22 +25,19 @@
 
     <div id="game-screen" class="section hidden">
         
-        <div style="background-color: #eee; padding: 10px; border-bottom: 2px solid red;">
+        <div style="background-color: #eee; padding: 10px; border-bottom: 2px solid red;">            
             状態: <span id="status-text" style="font-weight:bold;">待機中</span>
-            <br>
             次の更新まで: <span id="timer-display" style="font-size:24px; color:blue; font-weight:bold;">--</span> 秒
         </div>
-
-        <h3>あなたの役割: <span id="my-role-display">--</span></h3>
-
         <div class="section">
+            <あなたの役割: <span id="my-role-display">--</span> | 
             燃料: <span id="val-fuel">0</span> | 
             距離: <span id="val-dist">0</span> | 
             盾: <span id="val-shield">0</span>
         </div>
 
         <div class="section">
-            <h4>[1] サイコロを振る</h4>
+            [1] サイコロを振る
                 <b>操縦士:</b> <span id="p-dice-view"></span>
                 <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>
                 <b>機関士:</b> <span id="e-dice-view"></span>
@@ -49,16 +46,14 @@
         </div>
 
         <div class="section">
-            <h4>[2] 配置する</h4>
+            [2] 配置する
             <button id="btn-set-move" onclick="placeDice('move')" disabled>移動へ置く (<span id="slot-move">0</span>)</button>
             <button id="btn-set-energy" onclick="placeDice('energy')" disabled>エネルギーへ置く (<span id="slot-energy">0</span>)</button>
             <button id="btn-set-shield" onclick="placeDice('shield')" disabled>修理へ置く (<span id="slot-shield">0</span>)</button>
         </div>
-
         <div id="engage-area" class="section hidden">
-            <button onclick="resolveTurn()" style="font-size:20px;">★ 発進する (Engage) ★</button>
+            <button onclick="resolveTurn()" style="font-size:12px;">★ 発進する (Engage) ★</button>
         </div>
-
         <div id="reset-area" class="section hidden">
             <button onclick="doReset()">【管理者】強制リセット</button>
         </div>
