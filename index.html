@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -41,15 +41,11 @@
 
         <div class="section">
             <h4>[1] サイコロを振る</h4>
-            <div>
                 <b>操縦士:</b> <span id="p-dice-view"></span>
                 <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>
-            </div>
-            <div>
                 <b>機関士:</b> <span id="e-dice-view"></span>
                 <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>
-            </div>
-            <p>選択中の値: <b id="selected-val" style="font-size:12px; color:red;">未選択</b></p>
+                <p>選択中の値: <b id="selected-val" style="font-size:12px; color:red;">未選択</b></p>
         </div>
 
         <div class="section">
