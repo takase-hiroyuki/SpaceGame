@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Silent Orbit</title>
     <style>
+        /* --- デザイン設定 --- */
         body { background-color: #050510; color: #0f0; font-family: 'Courier New', monospace; text-align: center; margin: 0; padding: 10px; user-select: none; }
         h1, h2 { margin: 5px 0; text-shadow: 0 0 5px #0f0; }
         .hidden { display: none !important; }
@@ -19,6 +20,7 @@
         /* ボタン */
         button { background: #003300; color: #0f0; border: 1px solid #0f0; padding: 10px; font-size: 16px; cursor: pointer; border-radius: 4px; margin: 5px; }
         button:disabled { border-color: #444; color: #444; background: #111; }
+        button:active { background: #005500; }
         .btn-engage { background: #006600; color: #fff; font-weight: bold; width: 80%; padding: 15px; font-size: 20px; box-shadow: 0 0 10px #0f0; }
         .btn-engage:hover { background: #00aa00; }
         
@@ -34,11 +36,15 @@
         .slot-title { font-size: 12px; color: #8f8; margin-bottom: 5px; }
         .slot-val { font-size: 28px; color: #fff; font-weight: bold; }
         .slot button { width: 90%; font-size: 12px; padding: 5px; }
-
     </style>
 </head>
 <body>
 
+    <script>
+        // ↓↓↓ ここに GASのURL を貼り付けてください ↓↓↓
+        const API_URL = 'https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxx/exec';
+        // ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
+    </script>
     <div id="lobby" class="panel">
         <h1>SILENT ORBIT</h1>
         <p>COOPERATIVE SPACE MISSION</p>
@@ -99,44 +105,57 @@
             <button class="btn-engage" onclick="resolveTurn()">🚀 ENGAGE (発進)</button>
         </div>
 
-        <button id="btn-reset" class="hidden" onclick="act('reset')" style="background:#500; color:#faa; width:100%;">⚠ EMERGENCY RESET</button>
+        <button id="btn-reset" class="hidden" onclick="doReset()" style="background:#500; color:#faa; width:100%;">⚠ EMERGENCY RESET</button>
     </div>
 
     <script>
-        // ★★★ ここにGASのURLを貼る ★★★
-        const API = 'https://script.google.com/macros/s/xxxxxxxxxxxxxxxxxxxx/exec';
-        // ★★★★★★★★★★★★★★★★★★★
-
         let myRole = '';
         let selectedVal = 0;
         let lockUpdate = false;
 
+        // 参加処理
         async function join(role) {
+            // SVのパスワードチェック
             if (role === 'supervisor') {
                 if (prompt("Password?") !== "1234") return;
             }
-            // 参加リクエスト
+
+            // 操縦士・機関士の場合、空き状況を問い合わせる
+            // ★URLが間違っているとここで止まります
             if (role === 'pilot' || role === 'engineer') {
-                const res = await fetch(API + '?action=join&role=' + role).then(r=>r.json());
-                if (res.result === 'taken') { alert("満席です"); role = 'audience'; }
+                try {
+                    const res = await fetch(API_URL + '?action=join&role=' + role).then(r=>r.json());
+                    if (res.result === 'taken') {
+                        alert("その席は既に埋まっています。観戦モードになります。");
+                        role = 'audience';
+                    }
+                } catch(e) {
+                    alert("通信エラー: URL設定を確認してください\n" + e);
+                    return;
+                }
             }
             
+            // 画面切り替え
             myRole = role;
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('game').classList.remove('hidden');
             document.getElementById('disp-role').innerText = role.toUpperCase();
             
-            if (role === 'supervisor') document.getElementById('btn-reset').classList.remove('hidden');
+            // SVならリセットボタンを表示
+            if (role === 'supervisor') {
+                document.getElementById('btn-reset').classList.remove('hidden');
+            }
 
-            setInterval(update, 2000); // 2秒ごとに更新
+            // 定期更新開始 (2秒ごと)
+            setInterval(update, 2000);
             update();
         }
 
-        // 汎用アクション送信
+        // アクション送信
         async function act(action, params = {}) {
-            lockUpdate = true; // 通信中は更新ロック
+            lockUpdate = true;
             const qs = new URLSearchParams({ ...params, action: action }).toString();
-            await fetch(API + '?' + qs);
+            await fetch(API_URL + '?' + qs);
             lockUpdate = false;
             update();
         }
@@ -145,14 +164,22 @@
         function place(slotName) {
             if (selectedVal === 0) return;
             act('place', { slot: slotName, value: selectedVal });
-            selectedVal = 0; // 選択解除
+            selectedVal = 0;
         }
 
-        // ターン解決 (発進)
+        // ターン解決
         async function resolveTurn() {
             if(!confirm("発進しますか？ (機関士の準備はOKですか？)")) return;
-            const res = await fetch(API + '?action=resolve').then(r=>r.json());
-            alert(res.message); // 結果表示
+            const res = await fetch(API_URL + '?action=resolve').then(r=>r.json());
+            alert(res.message);
+            update();
+        }
+
+        // ★修正版：リセット処理
+        async function doReset() {
+            if (!confirm("【警告】\n本当にリセットしますか？\n全員のゲームが初期状態に戻ります。")) return;
+            await act('reset');
+            alert("リセット完了しました！");
             update();
         }
 
@@ -160,7 +187,7 @@
         async function update() {
             if (lockUpdate) return;
             try {
-                const s = await fetch(API).then(r => r.json()).then(d => d.state); // stateの中身を取得
+                const s = await fetch(API_URL).then(r => r.json()).then(d => d.state);
 
                 // HUD更新
                 document.getElementById('val-fuel').innerText = s.fuel;
@@ -180,13 +207,12 @@
                 document.getElementById('btn-roll-p').disabled = (myRole !== 'pilot');
                 document.getElementById('btn-roll-e').disabled = (myRole !== 'engineer');
                 
-                // 配置ボタン制御 (選択中かつ自分の担当のみ)
                 const hasSel = (selectedVal !== 0);
                 document.getElementById('btn-set-move').disabled = !(hasSel && myRole === 'pilot');
                 document.getElementById('btn-set-energy').disabled = !(hasSel && myRole === 'engineer');
                 document.getElementById('btn-set-shield').disabled = !(hasSel && myRole === 'engineer');
 
-                // 発進ボタン表示 (操縦士のみ、かつ移動スロットにダイスがある時)
+                // 発進ボタン表示
                 if (myRole === 'pilot' && s.slot_move > 0) {
                     document.getElementById('area-engage').classList.remove('hidden');
                 } else {
@@ -207,7 +233,6 @@
                 if (val === 0) d.classList.add('used');
                 d.innerText = val || '-';
                 
-                // 自分のダイスのみクリック可能
                 if (myRole === role && val !== 0) {
                     d.onclick = () => {
                         document.querySelectorAll('.dice').forEach(el => el.classList.remove('selected'));
