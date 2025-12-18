@@ -2,10 +2,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Silent Orbit (Minimal Fixed)</title>
+    <title>Silent Orbit (Fixed v2)</title>
     <style>
         .hidden { display: none; }
         .section { border: 1px solid black; margin: 5px; padding: 5px; }
+        /* 自分のダイスではない時の見た目 */
+        .dice-view { padding: 2px 5px; background: #eee; border: 1px solid #ccc; margin: 0 2px; }
     </style>
 </head>
 <body>
@@ -40,9 +42,11 @@
             [1] サイコロを振る
                 <b>操縦士:</b> <span id="p-dice-view"></span>
                 <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>　
+                
                 <b>機関士:</b> <span id="e-dice-view"></span>
                 <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>　
-                選択中の値: <b id="selected-val" color:red;">未選択</b>
+                
+                選択中の値: <b id="selected-val" style="color:red;">未選択</b>
         </div>
 
         <div class="section">
@@ -63,19 +67,16 @@
         let myRole = '';
         let selectedValue = 0;
         
-        // ★修正：タイマー関連の変数
-        let countdown = 0;       // 現在の残り秒数
-        let intervalSec = 3;     // 基本の更新間隔（秒）
-        let timerId = null;      // タイマー管理用
+        let countdown = 0;
+        let intervalSec = 3;
+        let timerId = null;
 
         // --- 1. 参加処理 ---
         async function joinGame(role) {
-            // パスワード確認
             if (role === 'supervisor') {
                 if (prompt("パスワード") !== "1234") return;
             }
 
-            // プレイヤーの空席確認
             if (role === 'pilot' || role === 'engineer') {
                 document.getElementById('status-text').innerText = "空席確認中...";
                 try {
@@ -90,53 +91,53 @@
                 }
             }
 
-            // ★役割ごとの秒数設定
             myRole = role;
+            // ★観戦者は10秒、プレイヤーは3秒
             if (myRole === 'audience') {
-                intervalSec = 10; // 観戦者は10秒
+                intervalSec = 10;
             } else {
-                intervalSec = 3;  // それ以外は3秒
+                intervalSec = 3;
             }
 
-            // 画面切り替え
             document.getElementById('lobby-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
             document.getElementById('my-role-display').innerText = role + " (更新間隔: " + intervalSec + "秒)";
             
             if (role === 'supervisor') document.getElementById('reset-area').classList.remove('hidden');
 
-            // ★タイマー開始
-            updateData(); // 最初の一回を実行
-            timerId = setInterval(timerLoop, 1000); // 1秒ごとにカウントダウン
+            // 初回実行
+            updateData(); 
         }
 
-        // --- 2. タイマー処理（修正版） ---
-        function timerLoop() {
-            // カウントダウン
-            countdown--;
-
-            // 画面表示
-            if (countdown < 0) countdown = 0;
+        // --- 2. タイマー処理（バグ修正版） ---
+        function startTimer() {
+            // すでにタイマーが動いていたら止める（二重起動防止）
+            if (timerId) clearInterval(timerId);
+            
+            countdown = intervalSec;
             document.getElementById('timer-display').innerText = countdown;
 
-            // 0になったら通信実行
-            if (countdown <= 0) {
-                updateData();
-            }
+            timerId = setInterval(() => {
+                countdown--;
+                document.getElementById('timer-display').innerText = countdown;
+
+                if (countdown <= 0) {
+                    // ★0になったらタイマーを止めて、通信する
+                    clearInterval(timerId);
+                    updateData();
+                }
+            }, 1000);
         }
 
         // --- 3. データ送受信 ---
         async function updateData() {
-            // 通信中は状態を表示
             document.getElementById('status-text').innerText = "データ受信中...";
             document.getElementById('status-text').style.color = "red";
 
             try {
-                // GASからデータ取得
                 const res = await fetch(API_URL).then(r => r.json());
                 const s = res.state;
 
-                // 画面更新
                 document.getElementById('val-fuel').innerText = s.fuel;
                 document.getElementById('val-dist').innerText = s.distance;
                 document.getElementById('val-shield').innerText = s.shield;
@@ -144,11 +145,10 @@
                 document.getElementById('slot-energy').innerText = s.slot_energy;
                 document.getElementById('slot-shield').innerText = s.slot_shield;
 
-                // ダイス描画
-                drawDice(s.p_dice, 'p-dice-view');
-                drawDice(s.e_dice, 'e-dice-view');
+                // ★修正: 持ち主の情報('pilot'/'engineer')を渡す
+                drawDice(s.p_dice, 'p-dice-view', 'pilot');
+                drawDice(s.e_dice, 'e-dice-view', 'engineer');
 
-                // 発進ボタン制御
                 if (myRole === 'pilot' && s.slot_move > 0) {
                     document.getElementById('engage-area').classList.remove('hidden');
                 } else {
@@ -157,41 +157,49 @@
 
                 updateButtons();
 
-                // ★通信成功したら、タイマーをリセットして待機に戻る
                 document.getElementById('status-text').innerText = "待機中";
                 document.getElementById('status-text').style.color = "black";
-                countdown = intervalSec; // ここで秒数を戻す
-                document.getElementById('timer-display').innerText = countdown;
+                
+                // ★通信が終わったらタイマー再開
+                startTimer();
 
             } catch(e) {
                 console.log(e);
-                document.getElementById('status-text').innerText = "通信失敗(リトライ中)";
-                countdown = 3; // エラー時は3秒後に再試行
+                document.getElementById('status-text').innerText = "再試行中...";
+                // エラー時もタイマー再開
+                startTimer();
             }
         }
 
         // --- 4. アクション送信 ---
         async function sendAction(actionName, params = {}) {
+            // 送信時はタイマーを止める
+            if (timerId) clearInterval(timerId);
             document.getElementById('status-text').innerText = "送信中...";
-            const qs = new URLSearchParams({ ...params, action: actionName }).toString();
             
-            // 送信
+            const qs = new URLSearchParams({ ...params, action: actionName }).toString();
             await fetch(API_URL + '?' + qs);
             
-            // 送信後はすぐに画面更新したいのでカウントを0にする
-            countdown = 0;
-            document.getElementById('timer-display').innerText = 0;
+            // 送信後はすぐに更新
+            updateData();
         }
 
-        // --- 5. ゲームロジック（ヘルパー関数） ---
-        function drawDice(diceArray, elementId) {
+        // --- 5. ゲームロジック ---
+        
+        // ★修正: ownerRole（誰のダイスか）を受け取る
+        function drawDice(diceArray, elementId, ownerRole) {
             let html = "";
             diceArray.forEach(val => {
                 if (val === 0) {
                     html += "[済] ";
                 } else {
-                    // 自分の値だけ選択可能にする
-                    html += `<button onclick="selectValue(${val})">[ ${val} ]</button> `;
+                    // ★修正: 自分の役割と持ち主が一致するときだけボタンにする
+                    if (myRole === ownerRole) {
+                        html += `<button onclick="selectValue(${val})">[ ${val} ]</button> `;
+                    } else {
+                        // 相手のダイスは見せるだけ（クリック不可）
+                        html += `<span class="dice-view">[ ${val} ]</span> `;
+                    }
                 }
             });
             document.getElementById(elementId).innerHTML = html;
