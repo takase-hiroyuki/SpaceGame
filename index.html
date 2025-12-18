@@ -49,13 +49,13 @@
                 <b>機関士:</b> <span id="e-dice-view"></span>
                 <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>
             </div>
-            <p>選択中の値: <b id="selected-val" style="font-size:20px; color:red;">未選択</b></p>
+            <p>選択中の値: <b id="selected-val" style="font-size:12px; color:red;">未選択</b></p>
         </div>
 
         <div class="section">
             <h4>[2] 配置する</h4>
-            <button id="btn-set-move" onclick="placeDice('move')" disabled>移動へ置く (<span id="slot-move">0</span>)</button><br>
-            <button id="btn-set-energy" onclick="placeDice('energy')" disabled>エネルギーへ置く (<span id="slot-energy">0</span>)</button><br>
+            <button id="btn-set-move" onclick="placeDice('move')" disabled>移動へ置く (<span id="slot-move">0</span>)</button>
+            <button id="btn-set-energy" onclick="placeDice('energy')" disabled>エネルギーへ置く (<span id="slot-energy">0</span>)</button>
             <button id="btn-set-shield" onclick="placeDice('shield')" disabled>修理へ置く (<span id="slot-shield">0</span>)</button>
         </div>
 
@@ -136,4 +136,105 @@
 
         // --- 3. データ送受信 ---
         async function updateData() {
-            // 通信中は
+            // 通信中は状態を表示
+            document.getElementById('status-text').innerText = "データ受信中...";
+            document.getElementById('status-text').style.color = "red";
+
+            try {
+                // GASからデータ取得
+                const res = await fetch(API_URL).then(r => r.json());
+                const s = res.state;
+
+                // 画面更新
+                document.getElementById('val-fuel').innerText = s.fuel;
+                document.getElementById('val-dist').innerText = s.distance;
+                document.getElementById('val-shield').innerText = s.shield;
+                document.getElementById('slot-move').innerText = s.slot_move;
+                document.getElementById('slot-energy').innerText = s.slot_energy;
+                document.getElementById('slot-shield').innerText = s.slot_shield;
+
+                // ダイス描画
+                drawDice(s.p_dice, 'p-dice-view');
+                drawDice(s.e_dice, 'e-dice-view');
+
+                // 発進ボタン制御
+                if (myRole === 'pilot' && s.slot_move > 0) {
+                    document.getElementById('engage-area').classList.remove('hidden');
+                } else {
+                    document.getElementById('engage-area').classList.add('hidden');
+                }
+
+                updateButtons();
+
+                // ★通信成功したら、タイマーをリセットして待機に戻る
+                document.getElementById('status-text').innerText = "待機中";
+                document.getElementById('status-text').style.color = "black";
+                countdown = intervalSec; // ここで秒数を戻す
+                document.getElementById('timer-display').innerText = countdown;
+
+            } catch(e) {
+                console.log(e);
+                document.getElementById('status-text').innerText = "通信失敗(リトライ中)";
+                countdown = 3; // エラー時は3秒後に再試行
+            }
+        }
+
+        // --- 4. アクション送信 ---
+        async function sendAction(actionName, params = {}) {
+            document.getElementById('status-text').innerText = "送信中...";
+            const qs = new URLSearchParams({ ...params, action: actionName }).toString();
+            
+            // 送信
+            await fetch(API_URL + '?' + qs);
+            
+            // 送信後はすぐに画面更新したいのでカウントを0にする
+            countdown = 0;
+            document.getElementById('timer-display').innerText = 0;
+        }
+
+        // --- 5. ゲームロジック（ヘルパー関数） ---
+        function drawDice(diceArray, elementId) {
+            let html = "";
+            diceArray.forEach(val => {
+                if (val === 0) {
+                    html += "[済] ";
+                } else {
+                    // 自分の値だけ選択可能にする
+                    html += `<button onclick="selectValue(${val})">[ ${val} ]</button> `;
+                }
+            });
+            document.getElementById(elementId).innerHTML = html;
+        }
+
+        function selectValue(val) {
+            selectedValue = val;
+            document.getElementById('selected-val').innerText = val;
+            updateButtons();
+        }
+
+        function placeDice(slotName) {
+            if (selectedValue === 0) return;
+            sendAction('place', { slot: slotName, value: selectedValue });
+            selectedValue = 0;
+            document.getElementById('selected-val').innerText = "未選択";
+        }
+
+        function resolveTurn() {
+            if(confirm("発進しますか？")) sendAction('resolve');
+        }
+
+        function doReset() {
+            if(confirm("リセットしますか？")) sendAction('reset');
+        }
+
+        function updateButtons() {
+            document.getElementById('btn-roll-p').disabled = (myRole !== 'pilot');
+            document.getElementById('btn-roll-e').disabled = (myRole !== 'engineer');
+            const hasSel = (selectedValue !== 0);
+            document.getElementById('btn-set-move').disabled = !(hasSel && myRole === 'pilot');
+            document.getElementById('btn-set-energy').disabled = !(hasSel && myRole === 'engineer');
+            document.getElementById('btn-set-shield').disabled = !(hasSel && myRole === 'engineer');
+        }
+    </script>
+</body>
+</html>
