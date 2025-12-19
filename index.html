@@ -276,22 +276,37 @@
             });
         };
 
-        // リセット
-        window.resetGame = () => {
-            set(gameRef, {
-                pilot_status: 'vacant',
-                engineer_status: 'vacant',
-                fuel: 5,
-                distance: 0,
-                shield: 3,
-                message: "Game Reset",
-                p_dice: [0, 0, 0],
-                e_dice: [0, 0, 0],
-                slot_move: 0,
-                slot_energy: 0,
-                slot_shield: 0
-            });
-        };
+	// 【変更後】パスワード機能付き
+	window.resetGame = () => {
+    	// 1. パスワードを聞く
+	    const pass = prompt("管理者パスワードを入力してください");
+    
+	    // 2. パスワード判定（ここでは '1234' に設定しています）
+    	if (pass !== "1234") {
+        	alert("パスワードが違います。");
+	        return; // ここで処理を中断
+    	}
+
+	    // 3. 最終確認
+    	if (!confirm("本当にリセットしますか？\n（現在のゲーム進行はすべて消えます）")) {
+        	return;
+	    }
+
+	    // 4. 合っていれば実行
+    	set(gameRef, {
+        	pilot_status: 'vacant',
+        	engineer_status: 'vacant',
+        	fuel: 5,
+        	distance: 0,
+        	shield: 3,
+        	message: "Game Reset",
+        	p_dice: [0, 0, 0],
+        	e_dice: [0, 0, 0],
+        	slot_move: 0,
+        	slot_energy: 0,
+        	slot_shield: 0
+	    });
+	};
 
         // HTMLのボタンと関数を紐付け
         document.getElementById('btn-join-pilot').onclick = () => joinGame('pilot');
