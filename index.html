@@ -2,37 +2,32 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Silent Orbit (Fixed v2)</title>
+    <title>Silent Orbit - Firebase Edition</title>
     <style>
         .hidden { display: none; }
         .section { border: 1px solid black; margin: 5px; padding: 5px; }
-        /* 自分のダイスではない時の見た目 */
         .dice-view { padding: 2px 5px; background: #eee; border: 1px solid #ccc; margin: 0 2px; }
+        button:disabled { color: #ccc; }
     </style>
 </head>
 <body>
 
-    <script>
-        // ↓↓↓ ここにGASのURLを貼る ↓↓↓
-        const API_URL = 'https://script.google.com/macros/s/AKfycbw19dV3WObyjGZDEXXqTA2G6PhitmvfbUXfyIe1qCYuzJ53-lnT_LhR5dZ1jlDHC9zV/exec';
-    </script>
-
     <div id="lobby-screen" class="section">
-        役割選択　
-        <button onclick="joinGame('pilot')">操縦士 (Pilot)</button>
-        <button onclick="joinGame('engineer')">機関士 (Engineer)</button>
-        <button onclick="joinGame('supervisor')">管理者 (SV)</button>
-        <button onclick="joinGame('audience')">観戦 (Monitor)</button>
+        <h3>Silent Orbit (Firebase Ver.)</h3>
+        役割を選択して参加してください<br>
+        <button id="btn-join-pilot">操縦士 (Pilot)</button>
+        <button id="btn-join-engineer">機関士 (Engineer)</button>
+        <button id="btn-join-monitor">観戦 (Monitor)</button>
+        <br><br>
+        <button onclick="resetGame()" style="background:#fdd;">管理者リセット</button>
     </div>
 
     <div id="game-screen" class="section hidden">
-        
-        <div style="background-color: #eee; padding: 10px; border-bottom: 2px solid red;">            
-            更新まで: <span id="timer-display" style="font-size:24px; color:blue; font-weight:bold;">--</span> 秒
-            <span id="status-text" style="font-weight:bold;">待機中</span>
+        <div style="background-color: #eee; padding: 10px; border-bottom: 2px solid blue;">            
+            <span id="status-text" style="font-weight:bold; color:green;">ONLINE (同期中)</span>
         </div>
         <div class="section">
-            <span id="my-role-display">--</span> ・・・ 
+            <span id="my-role-display">--</span> 
             燃料: <span id="val-fuel">0</span> | 
             距離: <span id="val-dist">0</span> | 
             盾: <span id="val-shield">0</span>
@@ -40,200 +35,275 @@
 
         <div class="section">
             [1] サイコロを振る
-                <b>操縦士:</b> <span id="p-dice-view"></span>
-                <button id="btn-roll-p" onclick="sendAction('roll', {role:'pilot'})" disabled>振る</button>　
-                
-                <b>機関士:</b> <span id="e-dice-view"></span>
-                <button id="btn-roll-e" onclick="sendAction('roll', {role:'engineer'})" disabled>振る</button>　
-                
-                選択中の値: <b id="selected-val" style="color:red;">未選択</b>
+            <br>
+            <b>操縦士:</b> <span id="p-dice-view"></span>
+            <button id="btn-roll-p" disabled>振る</button>
+            <br>
+            <b>機関士:</b> <span id="e-dice-view"></span>
+            <button id="btn-roll-e" disabled>振る</button>
+            <br>
+            選択中の値: <b id="selected-val" style="color:red;">未選択</b>
         </div>
 
         <div class="section">
             [2] 配置する
-            <button id="btn-set-move" onclick="placeDice('move')" disabled>移動へ置く (<span id="slot-move">0</span>)</button>
-            <button id="btn-set-energy" onclick="placeDice('energy')" disabled>エネルギーへ置く (<span id="slot-energy">0</span>)</button>
-            <button id="btn-set-shield" onclick="placeDice('shield')" disabled>修理へ置く (<span id="slot-shield">0</span>)</button>
+            <button id="btn-set-move" disabled>移動 (<span id="slot-move">0</span>)</button>
+            <button id="btn-set-energy" disabled>エネ (<span id="slot-energy">0</span>)</button>
+            <button id="btn-set-shield" disabled>修理 (<span id="slot-shield">0</span>)</button>
         </div>
+
         <div id="engage-area" class="section hidden">
-            <button onclick="resolveTurn()" style="font-size:12px;">★ 発進する (Engage) ★</button>
+            <button id="btn-resolve" style="font-size:16px; font-weight:bold; color:blue;">★ 発進 (Engage) ★</button>
         </div>
-        <div id="reset-area" class="section hidden">
-            <button onclick="doReset()">【管理者】強制リセット</button>
+        
+        <div style="margin-top:10px; font-size:12px; color:gray;">
+            Last Message: <span id="msg-display"></span>
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        // ★ここにコンソールからコピーした config を貼り付けてください
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update, set, runTransaction } 
+            from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+        const firebaseConfig = {
+			apiKey: "AIzaSyBEIWItzmx1Ydj0EqTOma7iV8VQFI94iFo",
+			authDomain: "space-game-6091a.firebaseapp.com",
+			databaseURL: "https://space-game-6091a-default-rtdb.firebaseio.com",
+			projectId: "space-game-6091a",
+			storageBucket: "space-game-6091a.firebasestorage.app",
+			messagingSenderId: "255760631360",
+			appId: "1:255760631360:web:84e662cf75382fbdcc41a5",
+			measurementId: "G-G1PDP47VB1"
+        };
+
+        // Firebase 初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const gameRef = ref(db, 'gameState'); // DB内の 'gameState' という場所を使います
+
+        // グローバル変数
         let myRole = '';
+        let currentData = null; // 最新のゲーム状況を常に保持
         let selectedValue = 0;
-        
-        let countdown = 0;
-        let intervalSec = 3;
-        let timerId = null;
 
-        // --- 1. 参加処理 ---
-        async function joinGame(role) {
-            if (role === 'supervisor') {
-                if (prompt("パスワード") !== "1234") return;
+        // --------------------------------------------------
+        // 1. リアルタイム受信 (onValue)
+        // --------------------------------------------------
+        // データが変更されるたび、自動的にこの関数が呼ばれます！
+        onValue(gameRef, (snapshot) => {
+            const data = snapshot.val();
+            if (!data) {
+                // データが無い場合は初期化
+                resetGame();
+                return;
             }
+            currentData = data;
+            render(data);
+        });
 
-            if (role === 'pilot' || role === 'engineer') {
-                document.getElementById('status-text').innerText = "空席確認中...";
-                try {
-                    const res = await fetch(API_URL + '?action=join&role=' + role).then(r => r.json());
-                    if (res.result === 'taken') {
-                        alert("満席のため観戦します");
-                        role = 'audience';
-                    }
-                } catch (e) {
-                    alert("通信エラー: URLを確認してください");
-                    return;
-                }
-            }
+        // --------------------------------------------------
+        // 2. 画面描画 (Render)
+        // --------------------------------------------------
+        function render(s) {
+            // 数値の更新
+            document.getElementById('val-fuel').innerText = s.fuel;
+            document.getElementById('val-dist').innerText = s.distance;
+            document.getElementById('val-shield').innerText = s.shield;
+            document.getElementById('slot-move').innerText = s.slot_move;
+            document.getElementById('slot-energy').innerText = s.slot_energy;
+            document.getElementById('slot-shield').innerText = s.slot_shield;
+            document.getElementById('msg-display').innerText = s.message || "";
 
-            myRole = role;
-            // ★観戦者は10秒、プレイヤーは3秒
-            if (myRole === 'audience') {
-                intervalSec = 10;
+            // ダイスの描画
+            drawDice(s.p_dice || [0,0,0], 'p-dice-view', 'pilot');
+            drawDice(s.e_dice || [0,0,0], 'e-dice-view', 'engineer');
+
+            // ボタン制御
+            document.getElementById('btn-roll-p').disabled = (myRole !== 'pilot');
+            document.getElementById('btn-roll-e').disabled = (myRole !== 'engineer');
+
+            const hasSel = (selectedValue !== 0);
+            document.getElementById('btn-set-move').disabled   = !(hasSel && myRole === 'pilot');
+            document.getElementById('btn-set-energy').disabled = !(hasSel && myRole === 'engineer');
+            document.getElementById('btn-set-shield').disabled = !(hasSel && myRole === 'engineer');
+
+            // 参加ボタンの制御（空席状況）
+            document.getElementById('btn-join-pilot').disabled = (s.pilot_status === 'occupied' && myRole !== 'pilot');
+            document.getElementById('btn-join-engineer').disabled = (s.engineer_status === 'occupied' && myRole !== 'engineer');
+
+            // Engageボタン (Pilotのみ、かつ移動スロットに値がある時)
+            if (myRole === 'pilot' && s.slot_move > 0) {
+                document.getElementById('engage-area').classList.remove('hidden');
             } else {
-                intervalSec = 3;
-            }
-
-            document.getElementById('lobby-screen').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-            document.getElementById('my-role-display').innerText = role + " (更新間隔: " + intervalSec + "秒)";
-            
-            if (role === 'supervisor') document.getElementById('reset-area').classList.remove('hidden');
-
-            // 初回実行
-            updateData(); 
-        }
-
-        // --- 2. タイマー処理（バグ修正版） ---
-        function startTimer() {
-            // すでにタイマーが動いていたら止める（二重起動防止）
-            if (timerId) clearInterval(timerId);
-            
-            countdown = intervalSec;
-            document.getElementById('timer-display').innerText = countdown;
-
-            timerId = setInterval(() => {
-                countdown--;
-                document.getElementById('timer-display').innerText = countdown;
-
-                if (countdown <= 0) {
-                    // ★0になったらタイマーを止めて、通信する
-                    clearInterval(timerId);
-                    updateData();
-                }
-            }, 1000);
-        }
-
-        // --- 3. データ送受信 ---
-        async function updateData() {
-            document.getElementById('status-text').innerText = "データ受信中...";
-            document.getElementById('status-text').style.color = "red";
-
-            try {
-                const res = await fetch(API_URL).then(r => r.json());
-                const s = res.state;
-
-                document.getElementById('val-fuel').innerText = s.fuel;
-                document.getElementById('val-dist').innerText = s.distance;
-                document.getElementById('val-shield').innerText = s.shield;
-                document.getElementById('slot-move').innerText = s.slot_move;
-                document.getElementById('slot-energy').innerText = s.slot_energy;
-                document.getElementById('slot-shield').innerText = s.slot_shield;
-
-                // ★修正: 持ち主の情報('pilot'/'engineer')を渡す
-                drawDice(s.p_dice, 'p-dice-view', 'pilot');
-                drawDice(s.e_dice, 'e-dice-view', 'engineer');
-
-                if (myRole === 'pilot' && s.slot_move > 0) {
-                    document.getElementById('engage-area').classList.remove('hidden');
-                } else {
-                    document.getElementById('engage-area').classList.add('hidden');
-                }
-
-                updateButtons();
-
-                document.getElementById('status-text').innerText = "待機中";
-                document.getElementById('status-text').style.color = "black";
-                
-                // ★通信が終わったらタイマー再開
-                startTimer();
-
-            } catch(e) {
-                console.log(e);
-                document.getElementById('status-text').innerText = "再試行中...";
-                // エラー時もタイマー再開
-                startTimer();
+                document.getElementById('engage-area').classList.add('hidden');
             }
         }
 
-        // --- 4. アクション送信 ---
-        async function sendAction(actionName, params = {}) {
-            // 送信時はタイマーを止める
-            if (timerId) clearInterval(timerId);
-            document.getElementById('status-text').innerText = "送信中...";
-            
-            const qs = new URLSearchParams({ ...params, action: actionName }).toString();
-            await fetch(API_URL + '?' + qs);
-            
-            // 送信後はすぐに更新
-            updateData();
-        }
-
-        // --- 5. ゲームロジック ---
-        
-        // ★修正: ownerRole（誰のダイスか）を受け取る
         function drawDice(diceArray, elementId, ownerRole) {
-            let html = "";
-            diceArray.forEach(val => {
+            const container = document.getElementById(elementId);
+            container.innerHTML = "";
+            
+            diceArray.forEach((val, index) => {
                 if (val === 0) {
-                    html += "[済] ";
+                    container.innerHTML += `<span style="color:#ccc;">[済]</span> `;
                 } else {
-                    // ★修正: 自分の役割と持ち主が一致するときだけボタンにする
                     if (myRole === ownerRole) {
-                        html += `<button onclick="selectValue(${val})">[ ${val} ]</button> `;
+                        // 自分のダイスはクリック可能なボタン
+                        const btn = document.createElement("button");
+                        btn.innerText = `[ ${val} ]`;
+                        btn.onclick = () => selectDiceValue(val);
+                        container.appendChild(btn);
                     } else {
-                        // 相手のダイスは見せるだけ（クリック不可）
-                        html += `<span class="dice-view">[ ${val} ]</span> `;
+                        // 相手のダイスは表示のみ
+                        container.innerHTML += `<span class="dice-view">[ ${val} ]</span> `;
                     }
                 }
             });
-            document.getElementById(elementId).innerHTML = html;
         }
 
-        function selectValue(val) {
+        // --------------------------------------------------
+        // 3. アクション処理
+        // --------------------------------------------------
+        
+        // 参加
+        window.joinGame = (role) => {
+            if (!currentData) return;
+            // 空席チェック
+            if (role === 'pilot' && currentData.pilot_status === 'occupied') {
+                alert("すでに埋まっています"); return;
+            }
+            if (role === 'engineer' && currentData.engineer_status === 'occupied') {
+                alert("すでに埋まっています"); return;
+            }
+
+            myRole = role;
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('my-role-display').innerText = role;
+
+            // DB上のステータスを更新
+            if (role === 'pilot') update(gameRef, { pilot_status: 'occupied' });
+            if (role === 'engineer') update(gameRef, { engineer_status: 'occupied' });
+        };
+
+        // ダイスロール
+        window.rollDice = (role) => {
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            const d3 = Math.floor(Math.random() * 6) + 1;
+            
+            if (role === 'pilot') {
+                update(gameRef, { p_dice: [d1, d2, d3] });
+            } else {
+                update(gameRef, { e_dice: [d1, d2, d3] });
+            }
+        };
+
+        // 値選択（ローカルのみ）
+        window.selectDiceValue = (val) => {
             selectedValue = val;
             document.getElementById('selected-val').innerText = val;
-            updateButtons();
-        }
+            // 画面再描画（ボタン活性化のため）
+            render(currentData); 
+        };
 
-        function placeDice(slotName) {
+        // 配置
+        window.placeDice = (slot) => {
             if (selectedValue === 0) return;
-            sendAction('place', { slot: slotName, value: selectedValue });
+            
+            const updates = {};
+            if (slot === 'move') updates.slot_move = selectedValue;
+            if (slot === 'energy') updates.slot_energy = selectedValue;
+            if (slot === 'shield') updates.slot_shield = selectedValue;
+
+            // ダイスを使用したことにする処理（配列から該当の値を1つ消す）
+            // ※簡易実装: DB全体を更新します
+            let diceArr = (myRole === 'pilot') ? [...currentData.p_dice] : [...currentData.e_dice];
+            const idx = diceArr.indexOf(selectedValue);
+            if (idx > -1) diceArr[idx] = 0; // 0は「使用済み」扱い
+
+            if (myRole === 'pilot') updates.p_dice = diceArr;
+            else updates.e_dice = diceArr;
+
+            update(gameRef, updates);
+
+            // ローカルリセット
             selectedValue = 0;
             document.getElementById('selected-val').innerText = "未選択";
-        }
+        };
 
-        function resolveTurn() {
-            if(confirm("発進しますか？")) sendAction('resolve');
-        }
+        // ターン解決 (計算ロジック)
+        window.resolveTurn = () => {
+            if(!confirm("発進しますか？")) return;
 
-        function doReset() {
-            if(confirm("リセットしますか？")) sendAction('reset');
-        }
+            // 現在の状態を取得して計算
+            const s = currentData;
+            const move = s.slot_move;
+            const energy = s.slot_energy;
+            const repair = s.slot_shield;
+            const envDamage = 1;
 
-        function updateButtons() {
-            document.getElementById('btn-roll-p').disabled = (myRole !== 'pilot');
-            document.getElementById('btn-roll-e').disabled = (myRole !== 'engineer');
-            const hasSel = (selectedValue !== 0);
-            document.getElementById('btn-set-move').disabled = !(hasSel && myRole === 'pilot');
-            document.getElementById('btn-set-energy').disabled = !(hasSel && myRole === 'engineer');
-            document.getElementById('btn-set-shield').disabled = !(hasSel && myRole === 'engineer');
-        }
+            let newFuel = s.fuel - move + energy;
+            let newDist = s.distance + move;
+            let newShield = s.shield + repair - envDamage;
+
+            // 上限下限
+            if (newFuel > 10) newFuel = 10;
+            if (newFuel < 0) newFuel = 0;
+            if (newShield > 5) newShield = 5;
+            if (newShield < 0) newShield = 0;
+
+            let msg = "Area Clear.";
+            if (newFuel === 0) msg = "GAME OVER: Fuel Depleted";
+            if (newShield === 0) msg = "GAME OVER: Shield Broken";
+            if (newDist >= 20) msg = "MISSION COMPLETE!";
+
+            // DB更新
+            update(gameRef, {
+                fuel: newFuel,
+                distance: newDist,
+                shield: newShield,
+                message: msg,
+                // スロットのリセット
+                slot_move: 0,
+                slot_energy: 0,
+                slot_shield: 0,
+                // ダイスのリセット
+                p_dice: [0,0,0],
+                e_dice: [0,0,0]
+            });
+        };
+
+        // リセット
+        window.resetGame = () => {
+            set(gameRef, {
+                pilot_status: 'vacant',
+                engineer_status: 'vacant',
+                fuel: 5,
+                distance: 0,
+                shield: 3,
+                message: "Game Reset",
+                p_dice: [0, 0, 0],
+                e_dice: [0, 0, 0],
+                slot_move: 0,
+                slot_energy: 0,
+                slot_shield: 0
+            });
+        };
+
+        // HTMLのボタンと関数を紐付け
+        document.getElementById('btn-join-pilot').onclick = () => joinGame('pilot');
+        document.getElementById('btn-join-engineer').onclick = () => joinGame('engineer');
+        document.getElementById('btn-join-monitor').onclick = () => joinGame('monitor');
+        document.getElementById('btn-roll-p').onclick = () => rollDice('pilot');
+        document.getElementById('btn-roll-e').onclick = () => rollDice('engineer');
+        document.getElementById('btn-set-move').onclick = () => placeDice('move');
+        document.getElementById('btn-set-energy').onclick = () => placeDice('energy');
+        document.getElementById('btn-set-shield').onclick = () => placeDice('shield');
+        document.getElementById('btn-resolve').onclick = () => resolveTurn();
+
     </script>
 </body>
 </html>
